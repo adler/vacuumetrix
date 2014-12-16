@@ -13,34 +13,49 @@ require 'rubygems' if RUBY_VERSION < "1.9"
 require 'curb'
 require 'json'
 
-if ARGV.length != 2
-	puts "I need two arguments. First is the application (e.g. 12345) second is the EndUser field (e.g. average_be_response_time)"
-	exit 1
+def collect_field(application_id, field_name)
+  t=Time.now.utc
+  timenow=t.to_i
+  s=t-60
+
+  timebegin=s.strftime("%FT%T")
+  timeend=t.strftime("%FT%T")
+
+  metricURL = "https://api.newrelic.com/api/v1/applications/"+application_id+"/data.json?summary=1&metrics[]=EndUser&field="+field_name+"&begin="+timebegin+"&end="+timeend
+  puts metricURL
+
+  response = Curl::Easy.perform(metricURL) do |curl| curl.headers["x-api-key"] = $newrelicapikey
+  end
+
+  body=response.body_str
+  result = JSON.parse(body)
+
+  r3=result[0]
+
+  appname = r3["app"].gsub( /[ \.]/, "_")
+  metricpath = "newrelic." + appname + "." + field_name
+  metricvalue = r3[field_name]
+  metrictimestamp = timenow.to_s
+
+  Sendit metricpath, metricvalue, metrictimestamp
 end
 
-application = ARGV[0]
-field = ARGV[1]
+if ARGV.length < 1
+  puts "usage: NewrelicEnduser.rb <application id> [-a | field name ...]"
+  exit 1
+end
+application = ARGV.shift
 
-t=Time.now.utc
-timenow=t.to_i
-s=t-60
+ALL_RUM_FIELDS = ['average_response_time', 'average_be_response_time',
+'average_fe_response_time', 'calls_per_minute', 'call_count',
+'min_response_time', 'max_response_time', 'requests_per_minute']
 
-timebegin=s.strftime("%FT%T")
-timeend=t.strftime("%FT%T")
-
-metricURL = "https://api.newrelic.com/api/v1/applications/"+application+"/data.json?summary=1&metrics[]=EndUser&field="+field+"&begin="+timebegin+"&end="+timeend
-
-response = Curl::Easy.perform(metricURL) do |curl| curl.headers["x-api-key"] = $newrelicapikey
+if ARGV[0] == '-a'
+  fields = ALL_RUM_FIELDS
+else
+  fields = ARGV
 end
 
-body=response.body_str
-result = JSON.parse(body)
-
-r3=result[0]
-
-appname = r3["app"].gsub( /[ \.]/, "_")
-metricpath = "newrelic." + appname + "." + field
-metricvalue = r3[field]
-metrictimestamp = timenow.to_s
-
-Sendit metricpath, metricvalue, metrictimestamp
+fields.each do |field|
+  collect_field application, field
+end
