@@ -22,7 +22,7 @@ def collect_field(application_id, field_name)
   timeend=t.strftime("%FT%T")
 
   metricURL = "https://api.newrelic.com/api/v1/applications/"+application_id+"/data.json?summary=1&metrics[]=EndUser&field="+field_name+"&begin="+timebegin+"&end="+timeend
-  puts metricURL
+  #puts metricURL
 
   response = Curl::Easy.perform(metricURL) do |curl| curl.headers["x-api-key"] = $newrelicapikey
   end
@@ -32,7 +32,7 @@ def collect_field(application_id, field_name)
 
   r3=result[0]
 
-  appname = r3["app"].gsub( /[ \.]/, "_")
+  appname = r3["app"].gsub( /[ \.()]/, "_")
   metricpath = "newrelic." + appname + "." + field_name
   metricvalue = r3[field_name]
   metrictimestamp = timenow.to_s
